@@ -1,0 +1,4 @@
+
+avr-g++ -g -Os -Wall -mcall-prologues -mmcu=atmega88 -fno-exceptions -o avr.obj avr.c
+avr-objcopy -R .eeprom -O ihex avr.obj avrout.hex
+sudo avrdude -c avrispmkII -p usb -p m88 -U flash:w:avrout.hex
