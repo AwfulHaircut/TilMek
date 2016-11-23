@@ -6,9 +6,13 @@
 #define MEAN 8
 #define TOTSTEPS 96
 #define CONV_TO_RPM 60*1000000*MEAN/(TOTSTEPS*64)
+#define GET 255
+#define 1HZ 15624
 
 volatile unsigned int speed;
-volatile unsigned char cycIx = 0;
+volatile unsigned int intCnt;
+volatile unsigned char cycIx;
+volatile unsigned int tmp;
 
 void USART_Init(unsigned int ubrr)
 {
@@ -30,39 +34,46 @@ void USART_Transmit( unsigned char data )
 	UDR0 = data;
 }
 
-unsigned char USART_Receive( void )
-{
-	/* Wait for data to be received */
-	while ( !(UCSR0A & (1<<RXC0)) )
-		;
-	/* Get and return received data from buffer */
-	return UDR0;
-}
-
 ISR(USART_RX_vect,ISR_BLOCK)
 {
 	/*Data received*/
-	char temp = USART_Receive();
-	USART_Transmit(temp);
+	unsigned char data = UDR0;
+
+	if(data == GET)
+	{
+		USART_Transmit((unsigned char) speed);
+	}
+	else
+	{
+
+	}
 }
 
 ISR(PCINT0_vect,ISR_BLOCK) //SPEED MEASURMENT
 {
-	PORTB ^= 1;
+	//PORTB ^= 1;
 
-	if(cycIx >= 8)
+	/*if((cycIx & 15) == 1)
 	{
+		//PORTB ^= 1;
 		unsigned int temp = TCNT1;
 		TCNT1 = 0;
 		speed = CONV_TO_RPM/temp;
-		cycIx = 0;
 	}
-	else
-	{
-		cycIx = cycIx + 1;
-	}
+	cycIx++;
+
+	*/
+	intCnt++;
 
 	PCIFR |= (1 << PCIF0);
+}
+
+ISR(TIMER1_COMPA_vect,ISR_BLOCK)
+{
+	tmp = intCnt;
+	intCnt = 0;
+
+	speed = tmp*60/(96*2.0);
 }
 
 void PWM_Init(void)
@@ -89,7 +100,7 @@ void PWM_Init(void)
 	TCCR2B |= (1 << CS20); //Prescaler N=1
 	
 	OCR2A = 250; //Setting TOP
-	OCR2B = 240; //Setting duty
+	OCR2B = 250; //Setting duty
 }
 
 void SM_Init(void)
@@ -98,8 +109,10 @@ void SM_Init(void)
 	PRR &= ~(1 << PRTIM1); //Enable timer one
 	TCCR1A = 0;
 	TCCR1B = 0;
-	TCCR1B |= (1 << CS11)|(1 << CS10); //Prescaler 64
+	TCCR1B |= (1 << CS11)|(1 << CS10)|(1 << WGM12); //Prescaler 64
 	TCNT1 = 0;
+	TIMSK1 |= (1 << OCIEA);
+	OCR1A = 1HZ;
 
 
 	DDRB &= ~(1 << PB1);
@@ -108,11 +121,6 @@ void SM_Init(void)
 	PCMSK0 |= (1 << PCINT1); //Enable pin change interrupt
 	PCICR |= (1 << PCIE0); //Enable interrupt
 	sei();
-
-}
-
-void send(unsigned char)
-{
 
 }
 
@@ -126,8 +134,8 @@ int main(void)
 	SM_Init();
 	while(1){
 
-		if(cycIx > 190){
-			PORTB |= (1<<0);
+		if(speed > 50){
+			PORTB |= 1;
 		}
 		
 	}
