@@ -1,5 +1,6 @@
 #include <avr/io.h>
-#include<avr/interrupt.h>
+#include <avr/interrupt.h>
+
 #define FOSC 1000000 // Clock Speed
 #define BAUD 9600
 #define MYUBRR FOSC/16/BAUD-1
@@ -7,12 +8,12 @@
 #define TOTSTEPS 96
 #define CONV_TO_RPM 60*1000000*MEAN/(TOTSTEPS*64)
 #define GET 255
-#define 1HZ 15624
+#define HZ 15624
 
-volatile unsigned int speed;
-volatile unsigned int intCnt;
-volatile unsigned char cycIx;
-volatile unsigned int tmp;
+static volatile unsigned char speed;
+static volatile unsigned int intCnt = 0;
+static volatile unsigned char cycIx;
+static volatile unsigned char tmp;
 
 void USART_Init(unsigned int ubrr)
 {
@@ -49,7 +50,7 @@ ISR(USART_RX_vect,ISR_BLOCK)
 	}
 }
 
-ISR(PCINT0_vect,ISR_BLOCK) //SPEED MEASURMENT
+ISR(PCINT0_vect, ISR_BLOCK) //SPEED MEASURMENT
 {
 	//PORTB ^= 1;
 
@@ -63,23 +64,38 @@ ISR(PCINT0_vect,ISR_BLOCK) //SPEED MEASURMENT
 	cycIx++;
 
 	*/
-	intCnt++;
+
+	//PORTB ^= 1;
+	
+	if((PINB & 4) == 4){
+		//PORTD ^= (1 << PD7);
+		intCnt += 1;
+		if (intCnt > 0)
+			PORTD ^= (1 << PD7);
+	}
 
 	PCIFR |= (1 << PCIF0);
 }
 
-ISR(TIMER1_COMPA_vect,ISR_BLOCK)
-{
-	tmp = intCnt;
-	intCnt = 0;
+ISR(TIMER1_COMPA_vect, ISR_BLOCK)
+{ 	
+	static int intCnt = 0;
+	//PORTD ^= (1 << PD7);
+	intCnt +=1;
+	if(intCnt ==1){
+			PORTB ^= 1;
+		}
 
-	speed = tmp*60/(96*2.0);
+	tmp = intCnt;
+	//intCnt = 0;
+
+	speed = tmp*60/(24.0);
 }
 
 void PWM_Init(void)
 {	
 	PRR &= ~(1 << PRTIM2); //Enable timer
-	TIMSK2 |= (1<<2)|(1<<1)|(1<<0);
+	TIMSK2 |= (1 << OCIE1B)|(1 << OCIE1A)|(1 << TOIE1);
 	DDRD |= (1 << 3); //Set pin output
 	//TCCR0A &= ~0xF3; //PWM setup
 	
@@ -105,18 +121,19 @@ void PWM_Init(void)
 
 void SM_Init(void)
 {
+
 	//Timer setup
 	PRR &= ~(1 << PRTIM1); //Enable timer one
 	TCCR1A = 0;
 	TCCR1B = 0;
 	TCCR1B |= (1 << CS11)|(1 << CS10)|(1 << WGM12); //Prescaler 64
-	TCNT1 = 0;
-	TIMSK1 |= (1 << OCIEA);
-	OCR1A = 1HZ;
+	TCNT1H = 0;
+	TIMSK1 |= (1 << OCIE1A);
+	OCR1A = HZ;
 
 
-	DDRB &= ~(1 << PB1);
-	PORTB |= (1 << PB1);
+	DDRB &= ~((1 << PB1)|(1 << PB2));
+	PORTB |= (1 << PB1)|(1 << PB2);
 	cli();
 	PCMSK0 |= (1 << PCINT1); //Enable pin change interrupt
 	PCICR |= (1 << PCIE0); //Enable interrupt
@@ -126,18 +143,26 @@ void SM_Init(void)
 
 int main(void)
 {
+	
+	//intCnt = (int*)malloc(1);
+	
+	
 	//PORTB = (1 << 0); //DEBUGLED2
 	//USART_Init(MYUBRR);
 	sei();
 	//UCSR0B |= 0x90; /*Enable receive interrupt*/
 	PWM_Init();
 	SM_Init();
+
 	while(1){
 
-		if(speed > 50){
+		//PORTB = (intCnt & 1);
+		/*if(intCnt > 0){
+			PORTB &= ~1;
+		}else{
 			PORTB |= 1;
-		}
-		
+		}*/
+
 	}
 	return 0;
 
