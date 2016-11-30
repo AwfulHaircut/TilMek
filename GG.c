@@ -3,7 +3,7 @@
 #define PIN_INT1	(1 << PB1)
 #define PIN_INT2	(1 << PB2)
 #define POWER_PWM	(1 << PD3)
-#define CONV_RPM 7268
+#define CONV_RPM 7268/2
 #define CLK_FREQ 1000000
 #define READ_PERIOD 1
 #define CTRL_PERIOD 90
@@ -40,24 +40,25 @@ void io_init(void)
 {
 	DDRB	= LED_LEFT;
 	DDRD	= LED_RIGHT | POWER_PWM;
-	PORTB	= PIN_INT1 | PIN_INT2;
+	PORTB	= PIN_INT1;// | PIN_INT2;
 }
 
 void interrupt_init(void)
 {
 	PCICR	= (1 << PCIE0);
-	PCMSK0	= (1 << PCINT1)|(1 << PCINT2);
+	PCMSK0	= (1 << PCINT1);//|(1 << PCINT2);
 }
 
 void timer_init(void)
 {
 	//Timer 1 init
-	TCCR1B	|= (1 << CS02)|(1 << CS01);
+	TCCR1B	|= (1 << CS01)|(1 << CS00);
+	TCNT1 = 0x0000;
 
 	//Timer 0 init
-	TCCR2A |= (1 << WGM01);
-	TCCR2B |= (1 << CS02) | (1 << CS00);
-	TIMSK0 |= (1 << OCIEA);
+	TCCR0A |= (1 << WGM01);
+	TCCR0B |= (1 << CS02) | (1 << CS00);
+	//TIMSK0 |= (1 << OCIE0A);
 	OCR0A = CTRL_PERIOD;
 
 }
@@ -82,33 +83,47 @@ int main(void)
 	
     while(1)
     {
-    	if(speed > 15)
-    		PORTB |= LED_LEFT;
+
+		if(speed > 315)
+		{
+			PORTB |= LED_LEFT;
+		}
+		else
+		{
+			PORTB & ~LED_LEFT;
+		}
+
     }
 }
 
 ISR(PCINT0_vect)
 {
+	//PORTB ^= LED_LEFT;
 
-	times[arrayPos & 7] = TCNT0;
-	TCNT0 = 0;
+	times[arrayPos & 7] = TCNT1;
+	TCNT1 = 0;
 
 	if((arrayPos & READ_PERIOD) == 1)
 	{
+		//PORTB ^= LED_LEFT;
+
+
 		tmp = 0;
 
-		for(char x = 0; x < 8; x++)
+		for(int x = 0; x < 8; x = x + 1)
 		{
 			tmp = tmp + times[x];
 		}
 
-		tmp >> 3;
-		speed = CONV_RPM/tmp;
+		//tmp = tmp >> 3;
+		speed = CONV_RPM / tmp;
 
 	}
+
+	arrayPos = arrayPos + 1;
 }
 
-ISR(TIMER0_COMPA_vect)
+/*ISR(TIMER0_COMPA_vect)
 {
 	signed int error = ref - speed;
 	signed int v = I + K * error;
@@ -117,4 +132,4 @@ ISR(TIMER0_COMPA_vect)
 
 	//Calculate integral for next round
 	I = I + (K * h / Ti) * error + (h / Tr) * (u - v);
-}
+}*/
