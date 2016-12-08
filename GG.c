@@ -9,6 +9,10 @@
 #define CTRL_PERIOD 90
 #define MEAN 8
 
+#define FOSC 1000000 // Clock Speed
+#define BAUD 2400
+#define MYUBRR FOSC/16/BAUD-1
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
@@ -19,13 +23,13 @@ static volatile unsigned char arrayPos;
 
 //Controll variables
 
-volatile unsigned char u = 0;
-volatile unsigned int ref = 40;
+volatile unsigned char u = 60;
+volatile unsigned int ref = 0;
 
-volatile double K = 1.4;
+volatile double K = 1.2*0.45;
 volatile double I = 0;
-volatile double Ti = 0.6;
-volatile double Tr = 0.6;
+volatile double Ti = 0.3;
+volatile double Tr = 0.3;
 volatile double h = 1.0 / (CLK_FREQ / 1024 / CTRL_PERIOD); 
 
 unsigned char saturate(signed int in)
@@ -33,8 +37,26 @@ unsigned char saturate(signed int in)
 	if(in > 255)
 		return 255;
 	if(in < 0)
-		return 0;
+	{	
+		if(ref != 0)
+		{
+			return 4;
+		}else{
+			return 0;	
+		}
+	}
 	return in;
+}
+
+void USART_Init(unsigned int ubrr)
+{
+	/*Set baud rate */
+	UBRR0H |= (unsigned char)(ubrr>>8);
+	UBRR0L |= (unsigned char)ubrr;
+	/*Enable receiver and transmitter*/
+	UCSR0B |= (1 << RXEN0) | (1 << TXEN0);
+	/* Set frame format: 8data, 1stop bit */
+	UCSR0C |= (3 << UCSZ00);
 }
 
 void io_init(void)
@@ -48,6 +70,7 @@ void interrupt_init(void)
 {
 	PCICR	= (1 << PCIE0);
 	PCMSK0	= (1 << PCINT1);//|(1 << PCINT2);
+	UCSR0B	|= (1 << RXCIE0); //Rx complete
 }
 
 void timer_init(void)
@@ -76,7 +99,16 @@ void pwm_init(void)
 
 void set_pwm(char input)
 {
-	OCR2B = (input ^ 0xff);
+	OCR2B = (input ^ 0xff); //Prova att sätta ! här istället
+}
+
+void send( unsigned char data)
+{
+ /* Wait for empty transmit buffer */
+ while (!( UCSR0A & (1 << UDRE0)))
+ ;
+ /* Put data into buffer, sends the data */
+ UDR0 = data;
 }
 
 int main(void)
@@ -85,21 +117,37 @@ int main(void)
 	interrupt_init();
 	timer_init();
 	pwm_init();
+	USART_Init(MYUBRR);
 	sei();
 	
+	//send((unsigned char) 5);
+
+	unsigned char old_data = 0;
+	unsigned char new_data = 0;
+
     while(1)
     {
-
-    	/*if(speed > 100 && speed < 110)
-		{
-			PORTB |= LED_LEFT;
-		}
-		else
-		{
-			PORTB &= ~LED_LEFT;
-		}*/
-
+    
     }
+}
+
+ISR(USART_RX_vect)
+{
+
+	PORTB ^= LED_LEFT;
+
+	unsigned char data = UDR0;
+
+	if(data == 255)
+	{
+		send((unsigned char) speed);
+	}
+	else
+	{
+		ref = data;
+	}
+
+	UCSR0A &= !(1 << RXC0); //flag is reset
 }
 
 ISR(PCINT0_vect)
@@ -126,8 +174,9 @@ ISR(PCINT0_vect)
 				tmp = tmp + times[x];
 			}
 
-			tmp = tmp >> 3;
+			tmp = tmp >> 3; // Här ska vara 3!!!! RIGGFEL
 			speed = 1.0 * CONV_RPM / tmp - 2;
+			//send(speed);
 
 		}
 
@@ -141,6 +190,7 @@ ISR(TIMER0_COMPA_vect)
 
 	signed int error = ref - speed;
 	signed int v = I + K * error;
+	//signed int v = K * error;
 	u = saturate(v);
 
 	set_pwm(u);
@@ -150,5 +200,7 @@ ISR(TIMER0_COMPA_vect)
 
 ISR(TIMER1_OVF_vect)
 {
+	times[arrayPos & (MEAN - 1)] = 0;
+	arrayPos++;
 	speed = 0;
 }

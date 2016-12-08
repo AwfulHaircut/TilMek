@@ -7,12 +7,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define BUFSIZE 20
+#define BUFSIZE 1
 #define INPUT_BUFFER_SIZE 64
 #define ARGS_BUFFER_SIZE 64
 
-char tbuf[BUFSIZE];
-char rbuf[BUFSIZE];
+unsigned char tbuf[BUFSIZE];
+unsigned char rbuf[BUFSIZE];
 size_t nbytes;
 struct termios options;
 
@@ -46,7 +46,7 @@ int receive()
 {
 
 	ssize_t bytes_read = read(fd, rbuf, BUFSIZE);
-	//printf("%s\n", rbuf);
+	printf("%u\n", *rbuf);
 	return bytes_read;
 }
 
@@ -64,9 +64,9 @@ char **parse(char *input)
 	char *copy;
 	char *arg;
 	const char delim[] = " \n";
-	
+
 	copy = strdup(input);
-	
+
 	arg = strsep(&copy,delim);
 
 	if(strcmp(arg,"send") == 0){
@@ -76,11 +76,13 @@ char **parse(char *input)
 		}else{
 			printf("Invalid command");
 		}
-	}else if(strcmp(arg,"read") == 0){
+	}else if(strcmp(arg,"r") == 0){
 		receive();
 	}else if(strcmp(arg,"get") == 0){
 		unsigned char get = 255;
 		transmit(&get);
+		sleep(1);
+		receive();
 	}else if(strcmp(arg,"set") == 0){
 		arg = strsep(&copy,delim);
 
@@ -103,7 +105,7 @@ char *getInput(void)
 }
 
 int main()
-{	
+{
 	char *input;
 	char **args;
 	ssize_t status;

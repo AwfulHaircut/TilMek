@@ -10,6 +10,7 @@
 #define GET 255
 #define HZ 15624
 
+
 static volatile unsigned char speed;
 static volatile unsigned int intCnt = 0;
 static volatile unsigned char cycIx;
@@ -24,6 +25,7 @@ void USART_Init(unsigned int ubrr)
 	UCSR0B = (1<<RXEN0)|(1<<TXEN0);
 	/* Set frame format: 8data, 2stop bit */
 	UCSR0C = (1<<USBS0)|(3<<UCSZ00);
+
 }
 
 void USART_Transmit( unsigned char data )
@@ -153,6 +155,7 @@ int main(void)
 	//UCSR0B |= 0x90; /*Enable receive interrupt*/
 	PWM_Init();
 	SM_Init();
+
 
 	while(1){
 
